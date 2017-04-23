@@ -1,0 +1,49 @@
+name: deposit
+version: '0.1.0.0'
+category: Acme
+author: Rob Berry
+maintainer: example@example.com
+copyright: ! 'Copyright: (c) 2017 Rob Berry'
+license: BSD3
+github: rob-b/deposit
+tested-with: GHC==7.10.2
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  ghc-options: -Wall
+  exposed-modules:
+  - Deposit
+  dependencies:
+  - base >=4.7 && <5
+  - Spock-core
+  - wai-extra
+  - wai
+  - http-types
+  - case-insensitive
+  - text
+  - aeson
+  - unordered-containers
+  - network
+  - bytestring
+executables:
+  deposit:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - deposit
+tests:
+  spec:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options: -Wall
+    dependencies:
+    - base
+    - deposit
+    - hspec
+    - QuickCheck

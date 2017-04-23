@@ -1,0 +1,10 @@
+- patterns:
+  - ^deposit.cabal$
+  - ^stack.yaml$
+  - ^package.yaml$
+  - .*\.hs$
+  commands:
+    - stack build --copy-bins
+    - killall deposit || echo deposit not running
+    - deposit
+
