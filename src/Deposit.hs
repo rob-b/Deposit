@@ -6,6 +6,7 @@ import           Data.Aeson                           hiding (json)
 import           Data.CaseInsensitive                 (original)
 import qualified Data.ByteString                      as B
 import           Data.List                            (intercalate)
+import           Data.Maybe                           (fromMaybe)
 import qualified Data.Text                            as T
 import           Data.Text.Encoding                   (decodeUtf8)
 import           GHC.Exts
@@ -18,25 +19,7 @@ import           Network.Wai.Middleware.RequestLogger
 import           Web.Spock.Core
 
 
--- {
---   "args": {},
---   "data": "{\"a\": 123}",
---   "files": {},
---   "form": {},
---   "headers": {
---     "Accept": "*/*",
---     "Connection": "close",
---     "Content-Length": "10",
---     "Content-Type": "application/json",
---     "Host": "httpbin.org",
---     "User-Agent": "curl/7.51.0"
---   },
---   "json": {
---     "a": 123
---   },
---   "origin": "212.69.50.106",
---   "url": "http://httpbin.org/post"
--- }
+type DepositAction a = ActionCtxT () IO a
 
 
 main :: IO ()
@@ -56,7 +39,6 @@ app = do
          Nothing -> undefined
          Just contentType -> selectResponseKind contentType req
 
-type DepositAction a = ActionCtxT () IO a
 
 selectResponseKind :: T.Text -> Request -> DepositAction ()
 selectResponseKind contentType req =
@@ -79,7 +61,7 @@ jsonAction req = do
       [ "json" .= (payload :: Value)
       , "headers" .= headerInfo req
       , "origin" .= originInfo req
-      , "args" .= getInfo req
+      , "args" .= queryStringInfo req
       , "data" .= decodeUtf8 body']
 
 
@@ -87,25 +69,28 @@ mw :: SpockT IO ()
 mw = middleware logStdoutDev
 
 
+-- | Combine the various info sources about a POST request
 combinedPostInfo :: Request -> B.ByteString -> Value
 combinedPostInfo req body' =
   Object $
   fromList
     [ "headers" .= headerInfo req
     , "origin" .= originInfo req
-    , "args" .= getInfo req
+    , "args" .= queryStringInfo req
     , "data" .= decodeUtf8 body']
 
 
+-- | Combine the various info sources about a GET request
 combinedGetInfo :: Request -> Value
 combinedGetInfo req =
   Object $
   fromList
     [ "headers" .= headerInfo req
     , "origin" .= originInfo req
-    , "args" .= getInfo req]
+    , "args" .= queryStringInfo req]
 
 
+-- | Info about the headers sent with the request
 headerInfo :: Request -> Value
 headerInfo req = Object $ fromList (headers req)
   where
@@ -116,6 +101,7 @@ headerInfo req = Object $ fromList (headers req)
         (requestHeaders req')
 
 
+-- | Info about the source ip of the request
 originInfo :: Request -> Value
 originInfo req = trans $ remoteHost req
   where
@@ -125,7 +111,20 @@ originInfo req = trans $ remoteHost req
       String . T.pack $ intercalate "." [show a, show b, show c, show d]
 
 
-getInfo :: Request -> Value
-getInfo req =
-  let tupleToValue (k,v) = decodeUtf8 k .= maybe "" decodeUtf8 v
-  in Object . fromList $ map tupleToValue (queryString req)
+-- | Info about the querystring parameters
+queryStringInfo :: Request -> Value
+queryStringInfo req =
+  let tupleToValue (k,v) = decodeUtf8 k .= map decodeUtf8 v
+      groupedValues = foldl groupValuesWithKey [] (queryString req)
+  in Object . fromList $ map tupleToValue groupedValues
+
+
+-- | Given a list of pairs like [(a, 1), (a, 2)], group the values by the key - [(a, [1, 2])]
+groupValuesWithKey
+  :: (IsString a, Eq a1)
+  => [(a1, [a])] -> (a1, Maybe a) -> [(a1, [a])]
+groupValuesWithKey old (k,v) =
+  let newValue = fromMaybe "" v
+  in case lookup k old of
+       Nothing -> (k, [newValue]) : old
+       Just v' -> (k, newValue : v') : filter (\pair -> fst pair /= k) old

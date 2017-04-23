@@ -23,7 +23,6 @@ library:
   - case-insensitive
   - text
   - aeson
-  - unordered-containers
   - network
   - bytestring
 executables:
