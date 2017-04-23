@@ -1,6 +1,6 @@
 # deposit
 
-[![Build Status](https://travis-ci.org/rob-b/deposit.png)](https://travis-ci.org/rob-b/deposit)
+[![Build Status](https://travis-ci.org/rob-b/Deposit.png)](https://travis-ci.org/rob-b/Deposit)
 
 Simple Http testing tool; akin to https://httpbin.org but much more limited.
 
