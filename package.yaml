@@ -37,13 +37,3 @@ executables:
     dependencies:
     - base
     - deposit
-tests:
-  spec:
-    main: Spec.hs
-    source-dirs: test
-    ghc-options: -Wall
-    dependencies:
-    - base
-    - deposit
-    - hspec
-    - QuickCheck
