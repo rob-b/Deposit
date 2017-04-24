@@ -25,5 +25,5 @@ So far only `POST` and `GET` are supported
 
 ```
 > curl -XGET "http://localhost:8080/get?foo=bar&foo=baz"
-{"origin":"127.0.0.1","args":{"foo":"baz"},"headers":{"Accept":"*/*","User-Agent":"curl/7.51.0","Host":"localhost:8080"}}%
+{"origin":"127.0.0.1","args":{"foo":["baz","baz"]},"headers":{"Accept":"*/*","User-Agent":"curl/7.51.0","Host":"localhost:8080"}}%
 ```
