@@ -27,7 +27,7 @@ main :: IO ()
 main = do
   port <- fmap (fromMaybe "8080") (lookupEnv "PORT")
   putStrLn $ "Ready to take deposits on port " ++ port
-  runSpock (read port) (spockT id (mw >> app))
+  runSpockNoBanner (read port) (spockT id (mw >> app))
 
 
 app :: SpockT IO ()
