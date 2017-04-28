@@ -23,7 +23,7 @@ type DepositAction a = ActionCtxT () IO a
 
 
 main :: IO ()
-main = runSpock 8080 (spockT id (mw >> app))
+main = putStrLn "Ready to take deposits on port 8080" >> runSpockNoBanner 8080 (spockT id (mw >> app))
 
 
 app :: SpockT IO ()
