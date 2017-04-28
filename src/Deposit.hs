@@ -3,8 +3,8 @@
 module Deposit where
 
 import           Data.Aeson                           hiding (json)
-import           Data.CaseInsensitive                 (original)
 import qualified Data.ByteString                      as B
+import           Data.CaseInsensitive                 (original)
 import           Data.List                            (intercalate)
 import           Data.Maybe                           (fromMaybe)
 import qualified Data.Text                            as T
@@ -16,6 +16,7 @@ import           Network.Wai                          (Request, queryString,
                                                        remoteHost,
                                                        requestHeaders)
 import           Network.Wai.Middleware.RequestLogger
+import           System.Environment                   (lookupEnv)
 import           Web.Spock.Core
 
 
@@ -23,7 +24,10 @@ type DepositAction a = ActionCtxT () IO a
 
 
 main :: IO ()
-main = putStrLn "Ready to take deposits on port 8080" >> runSpockNoBanner 8080 (spockT id (mw >> app))
+main = do
+  port <- fmap (fromMaybe "8080") (lookupEnv "PORT")
+  putStrLn $ "Ready to take deposits on port " ++ port
+  runSpock (read port) (spockT id (mw >> app))
 
 
 app :: SpockT IO ()
