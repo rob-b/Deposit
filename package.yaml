@@ -25,6 +25,8 @@ library:
   - aeson
   - network
   - bytestring
+  - time
+  - transformers
 executables:
   deposit:
     main: Main.hs

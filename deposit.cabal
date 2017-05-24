@@ -43,6 +43,8 @@ library
     , aeson
     , network
     , bytestring
+    , time
+    , transformers
 
 executable deposit
   default-language: Haskell2010

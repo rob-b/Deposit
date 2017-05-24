@@ -19,6 +19,17 @@ import           Network.Wai.Middleware.RequestLogger
 import           System.Environment                   (lookupEnv)
 import           Web.Spock.Core
 
+import Control.Monad.Trans.Class (lift)
+
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format
+
+
+date :: IO T.Text
+date = do
+  dt <- getCurrentTime
+  return (T.pack (formatTime defaultTimeLocale "%a, %e %B %Y %H:%M:%S %Z" dt))
+
 
 type DepositAction a = ActionCtxT () IO a
 
@@ -42,6 +53,12 @@ app = do
        case contentTypeM of
          Nothing -> undefined
          Just contentType -> selectResponseKind contentType req
+  get "cache" $
+    do req <- request
+       expires <- lift $ date
+       setHeader "Date" expires
+       setHeader "Cache-Control"  "public, max-age=60"
+       json $ combinedGetInfo req
 
 
 selectResponseKind :: T.Text -> Request -> DepositAction ()
