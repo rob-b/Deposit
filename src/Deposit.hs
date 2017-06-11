@@ -2,21 +2,20 @@
 
 module Deposit where
 
-import           Data.Aeson                           hiding (json)
-import qualified Data.ByteString                      as B
-import           Data.CaseInsensitive                 (original)
-import           Data.List                            (intercalate)
-import           Data.Maybe                           (fromMaybe)
-import qualified Data.Text                            as T
-import           Data.Text.Encoding                   (decodeUtf8)
+import           Config               (Environment (Development),
+                                       lookupSettingSafe, setLogger)
+import           Data.Aeson           hiding (json)
+import qualified Data.ByteString      as B
+import           Data.CaseInsensitive (original)
+import           Data.List            (intercalate)
+import           Data.Maybe           (fromMaybe)
+import qualified Data.Text            as T
+import           Data.Text.Encoding   (decodeUtf8)
 import           GHC.Exts
-import           Network.Socket                       (SockAddr (SockAddrInet),
-                                                       hostAddressToTuple)
-import           Network.Wai                          (Request, queryString,
-                                                       remoteHost,
-                                                       requestHeaders)
-import           Network.Wai.Middleware.RequestLogger
-import           System.Environment                   (lookupEnv)
+import           Network.Socket       (SockAddr (SockAddrInet),
+                                       hostAddressToTuple)
+import           Network.Wai          (Request, queryString, remoteHost,
+                                       requestHeaders)
 import           Web.Spock.Core
 
 import Control.Monad.Trans.Class (lift)
@@ -36,14 +35,17 @@ type DepositAction a = ActionCtxT () IO a
 
 main :: IO ()
 main = do
-  port <- fmap (fromMaybe "8080") (lookupEnv "PORT")
-  putStrLn $ "Ready to take deposits on port " ++ port
-  runSpockNoBanner (read port) (spockT id (mw >> app))
+  env <- lookupSettingSafe "ENV" Development
+  port <- lookupSettingSafe "PORT" 8080
+  let logger = setLogger env
+  putStrLn $ "Ready to take deposits on port " ++ show port
+  runSpockNoBanner port (spockT id (middleware logger >> app))
 
 
 app :: SpockT IO ()
 app = do
   get root . json $ decodeUtf8 "welcome to deposit, pal"
+  get "/health" $ text "Still going"
   get "get" $
     do req <- request
        json $ combinedGetInfo req
@@ -84,10 +86,6 @@ jsonAction req = do
       , "origin" .= originInfo req
       , "args" .= queryStringInfo req
       , "data" .= decodeUtf8 body']
-
-
-mw :: SpockT IO ()
-mw = middleware logStdoutDev
 
 
 -- | Combine the various info sources about a POST request
