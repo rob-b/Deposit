@@ -38,7 +38,7 @@ main = do
   env <- lookupSettingSafe "ENV" Development
   port <- lookupSettingSafe "PORT" 8080
   let logger = setLogger env
-  putStrLn $ "Ready to take deposits on port " ++ show port
+  putStrLn $ "Ready to take deposits on port " ++ show port ++ " (" ++ show env ++ ")"
   runSpockNoBanner port (spockT id (middleware logger >> app))
 
 
