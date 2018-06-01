@@ -2,26 +2,24 @@
 
 module Deposit where
 
-import           Config               (Environment (Development),
-                                       lookupSettingSafe, setLogger)
-import           Data.Aeson           hiding (json)
-import qualified Data.ByteString      as B
-import           Data.CaseInsensitive (original)
-import           Data.List            (intercalate)
-import           Data.Maybe           (fromMaybe)
-import qualified Data.Text            as T
-import           Data.Text.Encoding   (decodeUtf8)
+import           Config                    (Environment (Development), lookupSettingSafe,
+                                            setLogger)
+import           Data.Aeson                hiding (json)
+import qualified Data.ByteString           as B
+import           Data.CaseInsensitive      (original)
+import           Data.List                 (intercalate)
+import           Data.Maybe                (fromMaybe)
+import qualified Data.Text                 as T
+import           Data.Text.Encoding        (decodeUtf8)
 import           GHC.Exts
-import           Network.Socket       (SockAddr (SockAddrInet),
-                                       hostAddressToTuple)
-import           Network.Wai          (Request, queryString, remoteHost,
-                                       requestHeaders)
+import           Network.Socket            (SockAddr (SockAddrInet), hostAddressToTuple)
+import           Network.Wai               (Request, queryString, remoteHost, requestHeaders)
 import           Web.Spock.Core
 
-import Control.Monad.Trans.Class (lift)
+import           Control.Monad.Trans.Class (lift)
 
-import Data.Time.Clock (getCurrentTime)
-import Data.Time.Format
+import           Data.Time.Clock           (getCurrentTime)
+import           Data.Time.Format
 
 
 date :: IO T.Text
@@ -53,7 +51,7 @@ app = do
     do req <- request
        contentTypeM <- header "Content-Type"
        case contentTypeM of
-         Nothing -> undefined
+         Nothing          -> selectResponseKind "" req
          Just contentType -> selectResponseKind contentType req
   get "cache" $
     do req <- request
@@ -125,7 +123,7 @@ originInfo :: Request -> Value
 originInfo req = trans $ remoteHost req
   where
     trans (SockAddrInet _ hostAddr) = toIp $ hostAddressToTuple hostAddr
-    trans _ = "n/a"
+    trans _                         = "n/a"
     toIp (a,b,c,d) =
       String . T.pack $ intercalate "." [show a, show b, show c, show d]
 
