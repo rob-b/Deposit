@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.20.0.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3c76b672440d5df3316a4faaae443dd96939ae4840de5d39e8fcf31f59fbf650
+-- hash: 6a13ac7dfcb97766a5534fa3ba446402fa0753df391280d1d6e56fd5b1500446
 
 name:                deposit
 version:             0.4.0.0
@@ -15,9 +17,8 @@ maintainer:          example@example.com
 copyright:           Copyright: (c) 2017 Rob Berry
 category:            Acme
 build-type:          Simple
-cabal-version:       >= 1.10
-tested-with:         GHC==7.10.2
-
+tested-with:
+    GHC==7.10.2
 extra-source-files:
     README.md
 
@@ -41,22 +42,28 @@ library
     , base >=4.7 && <5
     , bytestring
     , case-insensitive
+    , data-default
     , http-types
     , network
     , text
     , time
+    , tls
     , transformers
     , wai
     , wai-extra
+    , warp
+    , warp-tls
+    , x509
+    , x509-validation
 
 executable deposit
-  default-language: Haskell2010
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  main-is: Main.hs
+  other-modules:
+      Paths_deposit
   hs-source-dirs:
       app
-  main-is: Main.hs
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
     , deposit
-  other-modules:
-      Paths_deposit
+  default-language: Haskell2010

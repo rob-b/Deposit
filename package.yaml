@@ -27,6 +27,12 @@ library:
   - bytestring
   - time
   - transformers
+  - warp
+  - warp-tls
+  - tls
+  - data-default
+  - x509
+  - x509-validation
 executables:
   deposit:
     main: Main.hs

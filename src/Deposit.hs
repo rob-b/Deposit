@@ -1,35 +1,71 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Deposit where
 
-import           Config                    (Environment (Development), lookupSettingSafe,
-                                            setLogger)
-import           Data.Aeson                hiding (json)
-import qualified Data.ByteString           as B
-import           Data.CaseInsensitive      (original)
-import           Data.List                 (intercalate)
-import           Data.Maybe                (fromMaybe)
-import qualified Data.Text                 as T
-import           Data.Text.Encoding        (decodeUtf8)
-import           GHC.Exts
-import           Network.Socket            (SockAddr (SockAddrInet), hostAddressToTuple)
-import           Network.Wai               (Request, queryString, remoteHost, requestHeaders)
-import           Web.Spock.Core
-
-import           Control.Monad.Trans.Class (lift)
-
-import           Data.Time.Clock           (getCurrentTime)
-import           Data.Time.Format
-
+import Data.Default (def)
+import qualified Network.Wai.Handler.Warp as Warp
+import qualified Network.Wai.Handler.WarpTLS as Warp
+import Config
+  ( Environment (Development),
+    lookupSettingSafe,
+    setLogger,
+  )
+import Control.Monad.Trans.Class (lift)
+import Data.Aeson hiding (json)
+import qualified Data.ByteString as B
+import Data.CaseInsensitive (original)
+import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format
+import GHC.Exts
+import Network.Socket (SockAddr (SockAddrInet), hostAddressToTuple)
+import Network.Wai (Middleware, Request, queryString, remoteHost, requestHeaders)
+import Web.Spock.Core
+-- import qualified Network.TLS.Parameters as TLS
+import qualified Network.TLS as TLS
+import qualified Data.X509 as X509
+import qualified Data.X509.Validation as X509
+import qualified Data.X509.CertificateStore as X509
+import Debug.Trace
 
 date :: IO T.Text
 date = do
   dt <- getCurrentTime
   return (T.pack (formatTime defaultTimeLocale "%a, %e %B %Y %H:%M:%S %Z" dt))
 
-
 type DepositAction a = ActionCtxT () IO a
 
+run :: Warp.Port -> IO Middleware -> IO ()
+run = runSpockNoBanner
+
+foo :: TLS.ServerHooks -> TLS.ServerHooks
+foo a = a { TLS.onClientCertificate = \_ -> return $ TLS.CertificateUsageReject $ TLS.CertificateRejectOther "no client certificates expected" }
+
+showChain :: X509.CertificateChain -> String
+showChain (X509.CertificateChain xs) = unlines $ map foo xs
+  where
+    foo :: (X509.SignedExact X509.Certificate) -> String
+    foo signedExact = do
+      let signed = X509.getSigned signedExact
+      let cert = X509.signedObject signed
+      let pubKey = X509.certPubKey cert
+      let verification = verifySignedSignature signedExact pubKey
+
+      let store = X509.makeCertificateStore signedExact
+      -- let vResult <- X509.validateDefault
+      show . X509.getSignedData $ signedExact
+
+runTLS :: Warp.Port -> IO Middleware -> IO ()
+runTLS port mw = do
+  let hooks :: TLS.ServerHooks = def TLS.ServerHooks
+  let hooks' = hooks { TLS.onClientCertificate = \(cert :: X509.CertificateChain) -> trace (showChain cert) (return $ TLS.CertificateUsageReject $ TLS.CertificateRejectOther "no client certificates expected") }
+  let tlsSettings = Warp.defaultTlsSettings { Warp.tlsWantClientCert = True, Warp.tlsServerHooks = hooks' }
+  let settings = Warp.setPort port Warp.defaultSettings
+  spockAsApp mw >>= Warp.runTLS tlsSettings settings
 
 main :: IO ()
 main = do
@@ -37,28 +73,37 @@ main = do
   port <- lookupSettingSafe "PORT" 8080
   let logger = setLogger env
   putStrLn $ "Ready to take deposits on port " ++ show port ++ " (" ++ show env ++ ")"
-  runSpockNoBanner port (spockT id (middleware logger >> app))
-
+  runTLS port (spockT id (middleware logger >> app))
 
 app :: SpockT IO ()
 app = do
   get root . json $ decodeUtf8 "welcome to deposit, pal"
   get "/health" $ text "Still going"
+  get "/api/v6/customer_accounts/search" $
+    do
+      req <- request
+      json $ combinedGetInfo req
   get "get" $
-    do req <- request
-       json $ combinedGetInfo req
+    do
+      req <- request
+      json $ combinedGetInfo req
   post "post" $
-    do req <- request
-       contentTypeM <- header "Content-Type"
-       case contentTypeM of
-         Nothing          -> selectResponseKind "" req
-         Just contentType -> selectResponseKind contentType req
+    do
+      req <- request
+      contentTypeM <- header "Content-Type"
+      case contentTypeM of
+        Nothing -> selectResponseKind "" req
+        Just contentType -> selectResponseKind contentType req
   get "cache" $
-    do req <- request
-       expires <- lift $ date
-       setHeader "Date" expires
-       setHeader "Cache-Control"  "public, max-age=60"
-       json $ combinedGetInfo req
+    do
+      req <- request
+      expires <- lift $ date
+      setHeader "Date" expires
+      setHeader "Cache-Control" "public, max-age=60"
+      json $ combinedGetInfo req
+
+  -- get "client-cert" $
+  --   do
 
 
 selectResponseKind :: T.Text -> Request -> DepositAction ()
@@ -66,7 +111,6 @@ selectResponseKind contentType req =
   if contentType == "application/json"
     then jsonAction req
     else formAction req
-
 
 formAction :: Request -> DepositAction ()
 formAction req = do
@@ -79,33 +123,33 @@ jsonAction req = do
   body' <- body
   json . Object $
     fromList
-      [ "json" .= (payload :: Value)
-      , "headers" .= headerInfo req
-      , "origin" .= originInfo req
-      , "args" .= queryStringInfo req
-      , "data" .= decodeUtf8 body']
-
+      [ "json" .= (payload :: Value),
+        "headers" .= headerInfo req,
+        "origin" .= originInfo req,
+        "args" .= queryStringInfo req,
+        "data" .= decodeUtf8 body'
+      ]
 
 -- | Combine the various info sources about a POST request
 combinedPostInfo :: Request -> B.ByteString -> Value
 combinedPostInfo req body' =
   Object $
-  fromList
-    [ "headers" .= headerInfo req
-    , "origin" .= originInfo req
-    , "args" .= queryStringInfo req
-    , "data" .= decodeUtf8 body']
-
+    fromList
+      [ "headers" .= headerInfo req,
+        "origin" .= originInfo req,
+        "args" .= queryStringInfo req,
+        "data" .= decodeUtf8 body'
+      ]
 
 -- | Combine the various info sources about a GET request
 combinedGetInfo :: Request -> Value
 combinedGetInfo req =
   Object $
-  fromList
-    [ "headers" .= headerInfo req
-    , "origin" .= originInfo req
-    , "args" .= queryStringInfo req]
-
+    fromList
+      [ "headers" .= headerInfo req,
+        "origin" .= originInfo req,
+        "args" .= queryStringInfo req
+      ]
 
 -- | Info about the headers sent with the request
 headerInfo :: Request -> Value
@@ -114,34 +158,33 @@ headerInfo req = Object $ fromList (headers req)
     headers :: Request -> [(T.Text, Value)]
     headers req' =
       map
-        (\(k,v) -> (decodeUtf8 (original k), String $ decodeUtf8 v))
+        (\(k, v) -> (decodeUtf8 (original k), String $ decodeUtf8 v))
         (requestHeaders req')
-
 
 -- | Info about the source ip of the request
 originInfo :: Request -> Value
 originInfo req = trans $ remoteHost req
   where
     trans (SockAddrInet _ hostAddr) = toIp $ hostAddressToTuple hostAddr
-    trans _                         = "n/a"
-    toIp (a,b,c,d) =
+    trans _ = "n/a"
+    toIp (a, b, c, d) =
       String . T.pack $ intercalate "." [show a, show b, show c, show d]
-
 
 -- | Info about the querystring parameters
 queryStringInfo :: Request -> Value
 queryStringInfo req =
-  let tupleToValue (k,v) = decodeUtf8 k .= map decodeUtf8 v
+  let tupleToValue (k, v) = decodeUtf8 k .= map decodeUtf8 v
       groupedValues = foldl groupValuesWithKey [] (queryString req)
-  in Object . fromList $ map tupleToValue groupedValues
-
+   in Object . fromList $ map tupleToValue groupedValues
 
 -- | Given a list of pairs like [(a, 1), (a, 2)], group the values by the key - [(a, [1, 2])]
-groupValuesWithKey
-  :: (IsString a, Eq a1)
-  => [(a1, [a])] -> (a1, Maybe a) -> [(a1, [a])]
-groupValuesWithKey old (k,v) =
+groupValuesWithKey ::
+  (IsString a, Eq a1) =>
+  [(a1, [a])] ->
+  (a1, Maybe a) ->
+  [(a1, [a])]
+groupValuesWithKey old (k, v) =
   let newValue = fromMaybe "" v
-  in case lookup k old of
-       Nothing -> (k, [newValue]) : old
-       Just v' -> (k, newValue : v') : filter (\pair -> fst pair /= k) old
+   in case lookup k old of
+        Nothing -> (k, [newValue]) : old
+        Just v' -> (k, newValue : v') : filter (\pair -> fst pair /= k) old
